@@ -1,0 +1,79 @@
+name: ChangeGuard Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful main push run ID from ChangeGuard CI
+        required: true
+        type: string
+      tag:
+        description: New release tag, for example v0.2.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changeguard-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.policy.outputs.sha }}
+      artifact_id: ${{ steps.policy.outputs.artifact_id }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Verify trusted successful build
+        id: policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ inputs.run_id }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: node scripts/ci/release-policy.mjs
+
+  release:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          artifact-ids: ${{ needs.verify.outputs.artifact_id }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: delivery
+          merge-multiple: true
+      - name: Verify checksums and commit binding
+        env:
+          EXPECTED_SHA: ${{ needs.verify.outputs.sha }}
+        working-directory: delivery
+        run: |
+          sha256sum --check SHA256SUMS
+          node -e 'const m=require("./manifest.json"); if(m.commit!==process.env.EXPECTED_SHA) throw new Error("Commit mismatch");'
+      - name: Publish immutable release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+        run: |
+          gh release create "$RELEASE_TAG" delivery/changeguard-source.zip delivery/changeguard-sites.tar.gz delivery/manifest.json delivery/SHA256SUMS --target "$RELEASE_SHA" --title "ChangeGuard $RELEASE_TAG" --notes "Validated source and Sites deployment bundle for $RELEASE_SHA. Runtime publication remains a separate Sites handoff; this release does not deploy the application."
+

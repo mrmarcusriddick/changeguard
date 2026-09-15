@@ -1,6 +1,6 @@
 {
-  "name": "site-creator-vinext-starter",
-  "version": "0.1.0",
+  "name": "changeguard",
+  "version": "0.2.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -11,6 +11,12 @@
     "build": "node scripts/run-framework.mjs build",
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint:app": "eslint app lib db tests scripts/ci azure/runtime",
+    "build:azure": "node scripts/ci/build-azure.mjs",
+    "test:azure": "NODE_ENV=test node --experimental-strip-types --test tests/azure.test.mjs",
+    "test": "node --experimental-strip-types --test tests/engine.test.ts tests/api.test.mjs tests/pipeline.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "ci:package": "node scripts/ci/package.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
@@ -27,6 +33,7 @@
     "lucide-react": "^1.31.0",
     "next": "16.2.6",
     "next-themes": "^0.4.6",
+    "pg": "8.16.3",
     "radix-ui": "^1.6.7",
     "react": "19.2.6",
     "react-day-picker": "^10.0.1",
@@ -44,6 +51,7 @@
     "@cloudflare/workers-types": "4.20260515.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
+    "@types/pg": "8.15.6",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
