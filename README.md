@@ -1,5 +1,7 @@
 # ChangeGuard v0.2
 
+Azure infrastructure must use free tiers only. See [the current free-tier infrastructure and remaining integration work](azure/FREE-TIER.md). The earlier paid Azure bootstrap/deployment path is blocked.
+
 ## CI and delivery
 
 Azure Commercial hosting is configured for the supplied tenant and subscription. See [Azure setup and deployment](azure/README.md) for the one-time bootstrap, Entra sign-in, private PostgreSQL, staging validation, production approval, and rollback instructions. These files prepare deployment; Azure resources and GitHub environment protections still need to be created.

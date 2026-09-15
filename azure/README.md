@@ -1,5 +1,7 @@
 # ChangeGuard on Azure Commercial
 
+**Superseded by the free-only requirement.** Use [FREE-TIER.md](FREE-TIER.md). The paid bootstrap and legacy runtime deployment workflows are blocked. The instructions below are historical and must not be used to provision paid resources.
+
 This is an additional deployment target for the existing prototype. The Azure build uses Next.js on Node 24, PostgreSQL, and App Service's Entra authentication. It does not deploy the Cloudflare Worker to Azure. Collectors remain explicitly simulated; connecting the Azure hosting subscription does **not** enable Microsoft Graph or infrastructure collection.
 
 | Setting | Value |

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Run once per environment in Azure Commercial Cloud Shell (Bash).
 set -euo pipefail
+echo 'Blocked: this legacy bootstrap provisions paid resources. Use azure/FREE-TIER.md for the free-only infrastructure.' >&2
+exit 1
 set +x
 umask 077
 ENVIRONMENT=${1:?Usage: bash azure/bootstrap.sh staging|production globally-unique-app-name [region]}

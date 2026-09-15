@@ -12,6 +12,8 @@ permissions:
   id-token: write
 jobs:
   deploy:
+    # This reusable workflow still targets the legacy paid PostgreSQL runtime.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment:
