@@ -1,0 +1,11 @@
+CREATE TABLE assets (id text PRIMARY KEY, name text NOT NULL, detail text NOT NULL);
+CREATE TABLE changes (id text PRIMARY KEY, owner text NOT NULL, asset_id text NOT NULL REFERENCES assets(id), title text NOT NULL, description text NOT NULL, created text NOT NULL);
+CREATE INDEX idx_changes_owner_created ON changes(owner, created);
+CREATE TABLE runs (id text PRIMARY KEY, change_id text NOT NULL REFERENCES changes(id), created text NOT NULL, result text NOT NULL);
+CREATE INDEX idx_runs_change_created ON runs(change_id, created);
+CREATE TABLE findings (id text PRIMARY KEY, run_id text NOT NULL REFERENCES runs(id), evidence text NOT NULL);
+CREATE INDEX idx_findings_run ON findings(run_id);
+CREATE TABLE plans (id text PRIMARY KEY, run_id text NOT NULL REFERENCES runs(id), created text NOT NULL, document text NOT NULL);
+CREATE INDEX idx_plans_run ON plans(run_id);
+CREATE TABLE audit (id text PRIMARY KEY, change_id text NOT NULL REFERENCES changes(id), actor text NOT NULL, action text NOT NULL, created text NOT NULL);
+CREATE INDEX idx_audit_change_created ON audit(change_id, created);

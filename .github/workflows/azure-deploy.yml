@@ -1,0 +1,64 @@
+name: Deploy Azure Commercial
+on:
+  workflow_run:
+    workflows: [ChangeGuard CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful main-branch ChangeGuard CI run ID (also used for code rollback)
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: azure-delivery
+  cancel-in-progress: false
+jobs:
+  verify:
+    # Free-only policy: PostgreSQL package must not deploy until Azure SQL migration is complete.
+    if: ${{ false }}
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      artifact_id: ${{ steps.source.outputs.artifact_id }}
+      run_id: ${{ steps.source.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - id: source
+        run: node scripts/ci/select-azure-run.mjs
+        env:
+          SOURCE_RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+          GH_TOKEN: ${{ github.token }}
+  staging:
+    needs: verify
+    uses: ./.github/workflows/azure-environment.yml
+    with:
+      environment: staging
+      sha: ${{ needs.verify.outputs.sha }}
+      artifact_id: ${{ needs.verify.outputs.artifact_id }}
+      run_id: ${{ needs.verify.outputs.run_id }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+  production:
+    needs: [verify, staging]
+    uses: ./.github/workflows/azure-environment.yml
+    with:
+      environment: production
+      sha: ${{ needs.verify.outputs.sha }}
+      artifact_id: ${{ needs.verify.outputs.artifact_id }}
+      run_id: ${{ needs.verify.outputs.run_id }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write

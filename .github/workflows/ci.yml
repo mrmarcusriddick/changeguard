@@ -1,0 +1,101 @@
+name: ChangeGuard CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate and package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      CLOUDFLARE_CF_FETCH_ENABLED: 'false'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Install pinned package manager
+        run: npm install --global pnpm@11.25.0
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint application and pipeline
+        run: pnpm lint:app
+      - name: Type check
+        run: pnpm typecheck
+      - name: Test scoring, API persistence and release policy
+        run: pnpm test
+      - name: Verify schema matches committed migrations
+        run: |
+          pnpm db:generate
+          test -z "$(git status --porcelain --untracked-files=all -- drizzle)"
+      - name: Build production Worker
+        run: pnpm build
+      - name: Package source and deployment output
+        run: pnpm ci:package
+      - name: Retain versioned delivery artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: changeguard-${{ github.sha }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30
+  azure:
+    name: Validate Azure runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: changeguard-test-only
+          POSTGRES_DB: changeguard_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: changeguard-test-only
+      PGDATABASE: changeguard_test
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - run: npm install --global pnpm@11.25.0
+      - run: pnpm install --frozen-lockfile
+      - name: Test Azure identity, PostgreSQL persistence and transaction rollback
+        run: pnpm test:azure
+      - name: Validate infrastructure syntax
+        run: |
+          az bicep build --file azure/infra/main.bicep --stdout > /dev/null
+          az bicep build --file azure/infra/free.bicep --stdout > /dev/null
+      - name: Build Azure standalone server and package
+        run: pnpm build:azure
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: changeguard-azure-${{ github.sha }}
+          path: |
+            artifacts/changeguard-azure.zip
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30

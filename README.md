@@ -1,4 +1,32 @@
-# vinext-starter
+# ChangeGuard v0.2
+
+Azure infrastructure must use free tiers only. See [the current free-tier infrastructure and remaining integration work](azure/FREE-TIER.md). The earlier paid Azure bootstrap/deployment path is blocked.
+
+## CI and delivery
+
+Azure Commercial hosting is configured for the supplied tenant and subscription. See [Azure setup and deployment](azure/README.md) for the one-time bootstrap, Entra sign-in, private PostgreSQL, staging validation, production approval, and rollback instructions. These files prepare deployment; Azure resources and GitHub environment protections still need to be created.
+
+GitHub Actions validates pull requests and main pushes, packages tested source and Worker output, and promotes successful main artifacts into versioned GitHub Releases. See [CI/CD setup and deployment handoff](docs/CI-CD.md). Live Sites publication is a separate supported-tool handoff; GitHub Releases do not automatically deploy the app.
+
+Persisted, analysis-only infrastructure change planning with mock collectors.
+
+## Implemented workflow
+
+Create a decommission request for SERVER17 or LAB02, run analysis, inspect evidence and contributions, then generate a saved draft plan. D1 stores assets, changes, immutable analysis snapshots, findings, plans and audit events. Records are scoped to the authenticated ChatGPT user; multi-customer tenant administration is not implemented.
+
+The SERVER17 fixture has 58 observed dependency points plus 20 uncertainty points. Scores cap observed contributions at 70 and uncertainty at 30. Coverage counts observed checks, not connected systems. LAB02 returns unknown evidence and unresolved readiness. Low scores never authorize execution. Plans are deterministic templates with evidence-specific actions, validation and rollback; there is no AI model integration and no infrastructure execution endpoint.
+
+## Verification
+
+Run `node --experimental-strip-types --test tests/engine.test.ts tests/api.test.mjs` on Node 22.13+ (or Node 24). API tests use SQLite and the actual route handler with injected identity and D1-compatible query methods; they do not exercise production Cloudflare dispatch or browser interactions.
+
+Run `node node_modules/typescript/bin/tsc --noEmit` for type checking. Tests cover score determinism, uncertainty, caps, saved plans, persistence after database reopen, immutable runs, ownership isolation, invalid input and cross-origin writes.
+
+API: `GET /api/workspace` lists owned changes; `GET /api/workspace?changeId=<id>` returns snapshots, current findings, plans and audit events. `POST /api/workspace` supports `create`, `analyze`, and `plan`. Writes require same-origin JSON and authenticated identity. Plan requests explicitly identify an existing run of the owned change.
+
+First schema migration: `drizzle/0000_boring_bruce_banner.sql`. Hosted publication applies it through Sites. The local migration instructions below apply to development only. Do not expose a standalone deployment without trusted authentication middleware; identity headers are trusted only behind Sites dispatch.
+
+## Framework and deployment reference
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 

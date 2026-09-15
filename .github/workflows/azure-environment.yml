@@ -1,0 +1,62 @@
+name: Azure environment deployment
+on:
+  workflow_call:
+    inputs:
+      environment: {required: true, type: string}
+      sha: {required: true, type: string}
+      artifact_id: {required: true, type: string}
+      run_id: {required: true, type: string}
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+jobs:
+  deploy:
+    # This reusable workflow still targets the legacy paid PostgreSQL runtime.
+    if: ${{ false }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          artifact-ids: ${{ inputs.artifact_id }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: delivery
+          merge-multiple: true
+      - name: Verify immutable package
+        working-directory: delivery
+        env:
+          EXPECTED_SHA: ${{ inputs.sha }}
+        run: |
+          sha256sum --check SHA256SUMS
+          test "$(unzip -p changeguard-azure.zip COMMIT)" = "$EXPECTED_SHA"
+      - uses: azure/login@8216e11d8cd9b42fe925c852af8e76311ff067ac # v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: a72c5ca4-2803-4603-b2ed-1d4e1a6db4f2
+          subscription-id: a2e23015-1a59-4109-9126-cd464798993f
+          environment: AzureCloud
+      - name: Deploy previously tested package
+        env:
+          APP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          test "$(az webapp auth show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query platform.enabled -o tsv)" = true
+          test "$(az webapp auth show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query globalValidation.requireAuthentication -o tsv)" = true
+          az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --src-path delivery/changeguard-azure.zip --type zip --clean true --restart true --output none
+      - name: Check database health, release identity, and authentication
+        env:
+          APP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+          EXPECTED_SHA: ${{ inputs.sha }}
+        run: node scripts/ci/smoke-azure.mjs "https://$APP_NAME.azurewebsites.net" "$EXPECTED_SHA"
