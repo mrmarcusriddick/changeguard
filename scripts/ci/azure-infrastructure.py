@@ -17,7 +17,11 @@ def az(*args):
                             text=True, capture_output=True, check=False)
     if result.returncode:
         raise RuntimeError(result.stderr.strip() or 'Azure command failed')
-    return json.loads(result.stdout) if result.stdout.strip() else None
+    try:
+        return json.loads(result.stdout) if result.stdout.strip() else None
+    except json.JSONDecodeError as error:
+        command = ' '.join(args[:3])
+        raise RuntimeError(f'az {command} returned non-JSON output; deployment stopped.') from error
 
 
 def inputs():
@@ -95,7 +99,7 @@ def provision():
     common = ['--resource-group', GROUP, '--template-file', str(TEMPLATE),
               '--parameters', '@' + str(parameter_file), '--mode', 'Incremental']
     az('deployment', 'group', 'validate', *common)
-    preview = az('deployment', 'group', 'what-if', *common)
+    preview = az('deployment', 'group', 'what-if', '--no-pretty-print', *common)
     print(json.dumps(preview, indent=2))
     # Deploy precisely the compiled template that passed the guard; no fallback.
     az('deployment', 'group', 'create', '--name', 'changeguard-free-infrastructure', *common)
