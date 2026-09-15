@@ -12,7 +12,7 @@ on:
         description: Check connection or provision free infrastructure
         type: choice
         options: [check, provision]
-        default: check
+        default: provision
       app_name:
         description: Globally unique lowercase Azure app name
         type: string
