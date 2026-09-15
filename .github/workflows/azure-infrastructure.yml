@@ -1,0 +1,65 @@
+name: Azure free infrastructure
+on:
+  push:
+    branches: [codex/azure-commercial-delivery, main]
+    paths:
+      - .github/workflows/azure-infrastructure.yml
+      - azure/infra/free.bicep
+      - scripts/ci/azure-infrastructure.py
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Check connection or provision free infrastructure
+        type: choice
+        options: [check, provision]
+        default: check
+      app_name:
+        description: Globally unique lowercase Azure app name
+        type: string
+        default: changeguard-mr-free
+      sql_admin_object_id:
+        description: Entra user object ID for SQL administrator (required for provision)
+        type: string
+      sql_admin_login:
+        description: Same Entra user's sign-in name (required for provision)
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: changeguard-free-infrastructure
+  cancel-in-progress: false
+jobs:
+  infrastructure:
+    if: github.repository == 'mrmarcusriddick/changeguard' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/azure-commercial-delivery')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    environment: azure-infrastructure
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+      CG_OPERATION: ${{ inputs.operation || 'check' }}
+      CG_APP_NAME: ${{ inputs.app_name || 'changeguard-mr-free' }}
+      CG_SQL_ADMIN_ID: ${{ inputs.sql_admin_object_id }}
+      CG_SQL_ADMIN_LOGIN: ${{ inputs.sql_admin_login }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validate connection configuration
+        run: python3 scripts/ci/azure-infrastructure.py inputs
+      - name: Sign in to Azure Commercial through GitHub OIDC
+        uses: azure/login@8216e11d8cd9b42fe925c852af8e76311ff067ac # v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          environment: AzureCloud
+      - name: Check resource group access and compile free template
+        run: python3 scripts/ci/azure-infrastructure.py check
+      - name: Preview and provision free resources
+        if: inputs.operation == 'provision' && github.event_name == 'workflow_dispatch'
+        run: python3 scripts/ci/azure-infrastructure.py provision

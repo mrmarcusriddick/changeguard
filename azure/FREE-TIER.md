@@ -21,6 +21,16 @@ Next implementation work: add the Azure SQL runtime adapter/migrations, initiali
 
 ## Provisioning from Azure Commercial Cloud Shell
 
+### GitHub OIDC workflow
+
+`Azure free infrastructure` uses the GitHub environment `azure-infrastructure`. Set `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` as environment secrets (variables are also accepted). Its federated identity subject must be `repo:mrmarcusriddick/changeguard:environment:azure-infrastructure`. Allow the working branch in that environment if testing before merge.
+
+Pushes affecting this workflow or its template/script run **connection checks only**. The check validates OIDC login, the target resource group, provider registration, and compiled free-tier settings. It never provisions on push. Once the workflow exists on the default branch, use Actions → Azure free infrastructure → Run workflow → `provision`, providing a globally unique app name and the SQL administrator's Entra **user** object ID and sign-in name. These identify the database administrator; they are not the deployment application's client ID. Find them in Entra ID → Users → your user → Overview.
+
+Provisioning runs ARM validation and what-if, then applies the same compiled template in incremental mode and verifies free-tier settings. No subscription-wide Contributor access, paid fallback, or automatic provider registration is used. Azure offer/quota failures stop the workflow. The app remains stopped until the SQL adapter and sign-in integration are ready.
+
+### Cloud Shell alternative
+
 The current coding session has GitHub write access, but no authenticated Azure session. A subscription ID does not confer Azure permissions. To review/provision the infrastructure, use Bash Cloud Shell signed into tenant `a72c5ca4-2803-4603-b2ed-1d4e1a6db4f2`, clone this branch, and run from the repository root. Choose a globally unique app name and the region already used for any SQL free-offer databases in this subscription.
 
 ```bash
