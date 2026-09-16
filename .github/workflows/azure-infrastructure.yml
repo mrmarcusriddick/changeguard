@@ -60,6 +60,27 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
           environment: AzureCloud
+      - name: Report PostgreSQL regional capabilities
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          for region in ('eastus', 'centralus', 'westus2'):
+              result = subprocess.run(
+                  ['az', 'postgres', 'flexible-server', 'list-skus', '--location', region,
+                   '--only-show-errors', '--output', 'json'],
+                  capture_output=True, text=True, check=False)
+              print(f'CAPABILITIES {region}', flush=True)
+              if result.returncode:
+                  print(result.stderr.strip(), flush=True)
+                  continue
+              try:
+                  data = json.loads(result.stdout)
+              except json.JSONDecodeError:
+                  print('Capability response was not JSON', flush=True)
+                  continue
+              print(json.dumps(data, separators=(',', ':')), flush=True)
+          PY
       - name: Check resource group access and compile PostgreSQL template
         run: python3 scripts/ci/azure-infrastructure.py check
       - name: Preview and provision F1 web and paid PostgreSQL
