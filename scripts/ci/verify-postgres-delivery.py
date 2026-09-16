@@ -10,6 +10,8 @@ if account['id'] != infra.SUBSCRIPTION or account['tenantId'] != infra.TENANT:
     raise RuntimeError('Unexpected Azure account')
 name = os.environ['CG_APP_NAME']
 app = az('webapp', 'show', '--resource-group', infra.GROUP, '--name', name)
+if app.get('state') == 'QuotaExceeded' or app.get('usageState') == 'Exceeded':
+    raise RuntimeError('App Service F1 quota is exceeded. Wait for quota recovery or explicitly authorize a hosting plan change; deployment stopped before upload.')
 plan = az('appservice', 'plan', 'show', '--ids', app['serverFarmId'])
 if plan['sku']['name'] != 'F1':
     raise RuntimeError('Expected F1 web hosting')
