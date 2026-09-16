@@ -81,3 +81,12 @@ jobs:
           APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
           EXPECTED_SHA: ${{ inputs.sha }}
         run: node scripts/ci/smoke-azure.mjs "https://$APP_NAME.azurewebsites.net" "$EXPECTED_SHA"
+      - name: Capture startup failure
+        if: failure()
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
+        run: |
+          az webapp show --resource-group changeguard-free --name "$APP_NAME" --query '{state:state,enabled:enabled,usageState:usageState}' -o json
+          az webapp log startup show --resource-group changeguard-free --name "$APP_NAME" --only-show-errors
