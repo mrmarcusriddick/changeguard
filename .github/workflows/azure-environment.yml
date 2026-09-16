@@ -55,7 +55,26 @@ jobs:
           APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
           RESOURCE_GROUP: changeguard-free
         run: |
+          APP_ID=$(az webapp show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query id -o tsv)
+          az webapp show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query '{state:state,enabled:enabled,availabilityState:availabilityState,usageState:usageState}' -o json
+          az rest --method patch --url "https://management.azure.com$APP_ID?api-version=2024-11-01" --body '{"properties":{"enabled":true}}' --output none
           az webapp start --resource-group "$RESOURCE_GROUP" --name "$APP_NAME"
+          kudu_ready=false
+          for attempt in $(seq 1 12); do
+            status=$(curl --silent --output /dev/null --write-out '%{http_code}' --connect-timeout 5 --max-time 10 "https://$APP_NAME.scm.azurewebsites.net/api/settings" || true)
+            # A 401 challenge is expected for this deliberately unauthenticated probe.
+            case "$status" in
+              200|401) kudu_ready=true; break ;;
+            esac
+            echo "Waiting for Kudu availability ($attempt/12, HTTP $status)"
+            sleep 10
+          done
+          if [ "$kudu_ready" != true ]; then
+            az webapp show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query '{state:state,enabled:enabled,availabilityState:availabilityState,usageState:usageState}' -o json
+            az rest --method get --url "https://management.azure.com$APP_ID/usages?api-version=2024-11-01" --output json || true
+            echo "::error::Kudu remains unavailable. Review app state and quota usage above; no SKU or authentication change was made."
+            exit 1
+          fi
           az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --src-path delivery/changeguard-azure.zip --type zip --clean true --restart true --output none
       - name: Check database health, release identity, and authentication
         env:
