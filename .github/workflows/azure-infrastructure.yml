@@ -86,7 +86,7 @@ jobs:
         run: |
           az webapp show --resource-group changeguard-free --name "$CG_APP_NAME" --query '{outbound:outboundIpAddresses,possibleOutbound:possibleOutboundIpAddresses}' -o json
           az postgres flexible-server show --resource-group changeguard-free --name "$CG_APP_NAME-pg" --query '{state:state,host:fullyQualifiedDomainName,network:network}' -o json
-          az postgres flexible-server firewall-rule list --resource-group changeguard-free --name "$CG_APP_NAME-pg" --query '[].{name:name,start:startIpAddress,end:endIpAddress}' -o json
+          az postgres flexible-server firewall-rule list --resource-group changeguard-free --server-name "$CG_APP_NAME-pg" --query '[].{name:name,start:startIpAddress,end:endIpAddress}' -o json
       - name: Read latest application startup failure
         if: inputs.operation != 'provision'
         continue-on-error: true
