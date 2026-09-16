@@ -1,3 +1,5 @@
+> **Current deployment:** [F1 + PostgreSQL setup](POSTGRESQL.md). Paid B1ms PostgreSQL is now authorized. The previous Azure SQL free-only instructions below are historical.
+
 # ChangeGuard on Azure Commercial
 
 **Superseded by the free-only requirement.** Use [FREE-TIER.md](FREE-TIER.md). The paid bootstrap and legacy runtime deployment workflows are blocked. The instructions below are historical and must not be used to provision paid resources.

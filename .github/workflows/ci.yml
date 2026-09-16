@@ -85,10 +85,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Test Azure identity, PostgreSQL persistence and transaction rollback
         run: pnpm test:azure
+      - name: Test infrastructure cost guards
+        run: python3 -m unittest discover -s tests -p "test_infrastructure.py"
       - name: Validate infrastructure syntax
         run: |
           az bicep build --file azure/infra/main.bicep --stdout > /dev/null
           az bicep build --file azure/infra/free.bicep --stdout > /dev/null
+          az bicep build --file azure/infra/postgres.bicep --stdout > /dev/null
       - name: Build Azure standalone server and package
         run: pnpm build:azure
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

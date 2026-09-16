@@ -1,15 +1,15 @@
-name: Azure free infrastructure
+name: Azure PostgreSQL infrastructure
 on:
   push:
     branches: [codex/azure-commercial-delivery, main]
     paths:
       - .github/workflows/azure-infrastructure.yml
-      - azure/infra/free.bicep
+      - azure/infra/postgres.bicep
       - scripts/ci/azure-infrastructure.py
   workflow_dispatch:
     inputs:
       operation:
-        description: Check connection or provision free infrastructure
+        description: Check connection or provision F1 web and paid B1ms PostgreSQL
         type: choice
         options: [check, provision]
         default: provision
@@ -17,16 +17,15 @@ on:
         description: Globally unique lowercase Azure app name
         type: string
         default: changeguard-mr-free
-      sql_admin_object_id:
-        description: Entra user object ID for SQL administrator (required for provision)
+      postgres_location:
+        description: PostgreSQL region (availability is subscription-specific)
         type: string
-      sql_admin_login:
-        description: Same Entra user's sign-in name (required for provision)
-        type: string
+        default: eastus
+
 permissions:
   contents: read
 concurrency:
-  group: changeguard-free-infrastructure
+  group: changeguard-azure-target
   cancel-in-progress: false
 jobs:
   infrastructure:
@@ -43,8 +42,11 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
       CG_OPERATION: ${{ inputs.operation || 'check' }}
       CG_APP_NAME: ${{ inputs.app_name || 'changeguard-mr-free' }}
-      CG_SQL_ADMIN_ID: ${{ inputs.sql_admin_object_id }}
-      CG_SQL_ADMIN_LOGIN: ${{ inputs.sql_admin_login }}
+      CG_POSTGRES_LOCATION: ${{ inputs.postgres_location || 'eastus' }}
+      CG_DATABASE_PASSWORD: ${{ secrets.CG_DATABASE_PASSWORD }}
+      CG_AUTH_CLIENT_ID: ${{ secrets.CG_AUTH_CLIENT_ID }}
+      CG_AUTH_CLIENT_SECRET: ${{ secrets.CG_AUTH_CLIENT_SECRET }}
+      PYTHONUNBUFFERED: '1'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -58,8 +60,8 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
           environment: AzureCloud
-      - name: Check resource group access and compile free template
+      - name: Check resource group access and compile PostgreSQL template
         run: python3 scripts/ci/azure-infrastructure.py check
-      - name: Preview and provision free resources
+      - name: Preview and provision F1 web and paid PostgreSQL
         if: inputs.operation == 'provision' && github.event_name == 'workflow_dispatch'
         run: python3 scripts/ci/azure-infrastructure.py provision

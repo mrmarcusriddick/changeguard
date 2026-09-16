@@ -14,12 +14,12 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: azure-delivery
+  group: changeguard-azure-target
   cancel-in-progress: false
 jobs:
   verify:
-    # Free-only policy: PostgreSQL package must not deploy until Azure SQL migration is complete.
-    if: ${{ false }}
+    # Set repository variable only after successful PostgreSQL provisioning.
+    if: vars.AZURE_POSTGRES_READY == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
     outputs:
       sha: ${{ steps.source.outputs.sha }}
@@ -38,23 +38,12 @@ jobs:
         env:
           SOURCE_RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
           GH_TOKEN: ${{ github.token }}
-  staging:
+  production:
     needs: verify
     uses: ./.github/workflows/azure-environment.yml
+    secrets: inherit
     with:
-      environment: staging
-      sha: ${{ needs.verify.outputs.sha }}
-      artifact_id: ${{ needs.verify.outputs.artifact_id }}
-      run_id: ${{ needs.verify.outputs.run_id }}
-    permissions:
-      contents: read
-      actions: read
-      id-token: write
-  production:
-    needs: [verify, staging]
-    uses: ./.github/workflows/azure-environment.yml
-    with:
-      environment: production
+      environment: azure-infrastructure
       sha: ${{ needs.verify.outputs.sha }}
       artifact_id: ${{ needs.verify.outputs.artifact_id }}
       run_id: ${{ needs.verify.outputs.run_id }}

@@ -12,13 +12,12 @@ permissions:
   id-token: write
 jobs:
   deploy:
-    # This reusable workflow still targets the legacy paid PostgreSQL runtime.
-    if: ${{ false }}
+    if: github.repository == 'mrmarcusriddick/changeguard' && vars.AZURE_POSTGRES_READY == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment:
       name: ${{ inputs.environment }}
-      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+      url: https://${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}.azurewebsites.net
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -43,20 +42,25 @@ jobs:
           test "$(unzip -p changeguard-azure.zip COMMIT)" = "$EXPECTED_SHA"
       - uses: azure/login@8216e11d8cd9b42fe925c852af8e76311ff067ac # v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           tenant-id: a72c5ca4-2803-4603-b2ed-1d4e1a6db4f2
           subscription-id: a2e23015-1a59-4109-9126-cd464798993f
           environment: AzureCloud
+      - name: Verify F1 and PostgreSQL before delivery
+        env:
+          CG_APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
+        run: python3 scripts/ci/verify-postgres-delivery.py
       - name: Deploy previously tested package
         env:
-          APP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
-          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
+          RESOURCE_GROUP: changeguard-free
         run: |
           test "$(az webapp auth show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query platform.enabled -o tsv)" = true
           test "$(az webapp auth show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query globalValidation.requireAuthentication -o tsv)" = true
+          az webapp start --resource-group "$RESOURCE_GROUP" --name "$APP_NAME"
           az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --src-path delivery/changeguard-azure.zip --type zip --clean true --restart true --output none
       - name: Check database health, release identity, and authentication
         env:
-          APP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+          APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
           EXPECTED_SHA: ${{ inputs.sha }}
         run: node scripts/ci/smoke-azure.mjs "https://$APP_NAME.azurewebsites.net" "$EXPECTED_SHA"

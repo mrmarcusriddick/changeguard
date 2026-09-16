@@ -1,3 +1,5 @@
+> **Current deployment:** [F1 + PostgreSQL setup](POSTGRESQL.md). Paid B1ms PostgreSQL is now authorized. The previous Azure SQL free-only instructions below are historical.
+
 # Free-only Azure infrastructure
 
 This supersedes the paid B1/PostgreSQL setup instructions. Do not run the original paid template. No Azure resources have been created by this change.
