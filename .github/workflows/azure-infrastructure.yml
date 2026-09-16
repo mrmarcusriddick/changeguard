@@ -81,6 +81,11 @@ jobs:
                   continue
               print(json.dumps(data, separators=(',', ':')), flush=True)
           PY
+      - name: Read latest application startup failure
+        if: inputs.operation != 'provision'
+        continue-on-error: true
+        run: |
+          az webapp log startup show --resource-group changeguard-free --name "$CG_APP_NAME" --only-show-errors
       - name: Check resource group access and compile PostgreSQL template
         run: python3 scripts/ci/azure-infrastructure.py check
       - name: Preview and provision F1 web and paid PostgreSQL
