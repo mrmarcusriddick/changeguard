@@ -19,7 +19,15 @@ if pg['state'] != 'Ready' or pg['sku']['name'] != 'Standard_B1ms' or infra.postg
 settings = {s['name']: s['value'] for s in az('webapp', 'config', 'appsettings', 'list', '--resource-group', infra.GROUP, '--name', name)}
 if settings.get('PGHOST') != pg['fullyQualifiedDomainName'] or settings.get('PGSSLMODE') != 'verify-full' or not settings.get('PGPASSWORD'):
     raise RuntimeError('PostgreSQL connection settings are incomplete')
-auth = az('webapp', 'auth', 'show', '--resource-group', infra.GROUP, '--name', name)
-if not auth['platform']['enabled'] or not auth['globalValidation']['requireAuthentication'] or not auth['identityProviders']['azureActiveDirectory']['registration'].get('clientId'):
-    raise RuntimeError('Entra authentication must be configured before delivery')
+auth_url = (f'https://management.azure.com/subscriptions/{infra.SUBSCRIPTION}'
+            f'/resourceGroups/{infra.GROUP}/providers/Microsoft.Web/sites/{name}'
+            '/config/authsettingsV2/list?api-version=2024-11-01')
+auth = (az('rest', '--method', 'get', '--url', auth_url).get('properties') or {})
+provider = (auth.get('identityProviders') or {}).get('azureActiveDirectory') or {}
+registration = provider.get('registration') or {}
+if ((auth.get('platform') or {}).get('enabled') is not True
+        or (auth.get('globalValidation') or {}).get('requireAuthentication') is not True
+        or provider.get('enabled') is not True
+        or not registration.get('clientId')):
+    raise RuntimeError('Entra authsettingsV2 must enable authentication, require sign-in, and configure the Microsoft provider before delivery')
 print('Authorized F1/PostgreSQL target and Entra configuration verified')

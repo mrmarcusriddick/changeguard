@@ -55,8 +55,6 @@ jobs:
           APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
           RESOURCE_GROUP: changeguard-free
         run: |
-          test "$(az webapp auth show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query platform.enabled -o tsv)" = true
-          test "$(az webapp auth show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query globalValidation.requireAuthentication -o tsv)" = true
           az webapp start --resource-group "$RESOURCE_GROUP" --name "$APP_NAME"
           az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --src-path delivery/changeguard-azure.zip --type zip --clean true --restart true --output none
       - name: Check database health, release identity, and authentication
