@@ -14,7 +14,7 @@ plan = az('appservice', 'plan', 'show', '--ids', app['serverFarmId'])
 if plan['sku']['name'] != 'F1':
     raise RuntimeError('Expected F1 web hosting')
 pg = az('postgres', 'flexible-server', 'show', '--resource-group', infra.GROUP, '--name', name + '-pg')
-if pg['state'] != 'Ready' or pg['sku']['name'] != 'Standard_B1ms' or pg['storage']['storageSizeGB'] != 32 or pg['storage']['autoGrow'] != 'Disabled':
+if pg['state'] != 'Ready' or pg['sku']['name'] != 'Standard_B1ms' or infra.postgres_storage_gb(pg) != 32 or pg['storage']['autoGrow'] != 'Disabled':
     raise RuntimeError('PostgreSQL is not ready with authorized sizing')
 settings = {s['name']: s['value'] for s in az('webapp', 'config', 'appsettings', 'list', '--resource-group', infra.GROUP, '--name', name)}
 if settings.get('PGHOST') != pg['fullyQualifiedDomainName'] or settings.get('PGSSLMODE') != 'verify-full' or not settings.get('PGPASSWORD'):

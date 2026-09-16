@@ -25,6 +25,15 @@ def az(*args):
         raise RuntimeError(f'az {command} returned non-JSON output; deployment stopped.') from error
 
 
+def postgres_storage_gb(server):
+    """CLI uses storageSizeGb; ARM templates use storageSizeGB."""
+    storage = server.get('storage') or {}
+    values = [storage[key] for key in ('storageSizeGb', 'storageSizeGB') if key in storage]
+    if not values or any(type(value) is not int or value <= 0 for value in values) or len(set(values)) != 1:
+        raise ValueError('PostgreSQL storage size is missing, invalid, or inconsistent; stopping.')
+    return values[0]
+
+
 def inputs():
     for name in ('AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID'):
         if not re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', os.environ.get(name, '')):
@@ -96,7 +105,7 @@ def provision():
     servers = az('postgres', 'flexible-server', 'list', '--resource-group', GROUP)
     for server in servers:
         if server['name'] == name + '-pg':
-            if server['sku']['name'] != 'Standard_B1ms' or server['storage']['storageSizeGB'] != 32:
+            if server['sku']['name'] != 'Standard_B1ms' or postgres_storage_gb(server) != 32:
                 raise ValueError('Existing PostgreSQL server has different sizing; stopping without resizing.')
             if server['location'].replace(' ', '').lower() != os.environ.get('CG_POSTGRES_LOCATION', 'eastus'):
                 raise ValueError('Existing PostgreSQL server is in another region; relocation requires a migration.')
@@ -121,7 +130,7 @@ def provision():
         parameter_file.unlink(missing_ok=True)
     plan = az('appservice', 'plan', 'show', '--resource-group', GROUP, '--name', name + '-free')
     database = az('postgres', 'flexible-server', 'show', '--resource-group', GROUP, '--name', name + '-pg')
-    if plan['sku']['name'] != 'F1' or database['sku']['name'] != 'Standard_B1ms' or database['storage']['storageSizeGB'] != 32 or database['storage']['autoGrow'] != 'Disabled':
+    if plan['sku']['name'] != 'F1' or database['sku']['name'] != 'Standard_B1ms' or postgres_storage_gb(database) != 32 or database['storage']['autoGrow'] != 'Disabled':
         raise ValueError('Post-deployment cost verification failed. Inspect the resources immediately.')
     app = az('webapp', 'show', '--resource-group', GROUP, '--name', name)
     addresses = sorted({str(ipaddress.IPv4Address(ip)) for ip in app['outboundIpAddresses'].split(',')})

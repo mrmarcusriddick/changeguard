@@ -19,6 +19,17 @@ class InfrastructureGuards(unittest.TestCase):
                             'backup': {'backupRetentionDays': 7, 'geoRedundantBackup': 'Disabled'},
                             'highAvailability': {'mode': 'Disabled'}}}]}
 
+    def test_storage_response_casing(self):
+        for key in ('storageSizeGb', 'storageSizeGB'):
+            self.assertEqual(infra.postgres_storage_gb({'storage': {key: 32}}), 32)
+            self.assertEqual(infra.postgres_storage_gb({'storage': {key: 64}}), 64)
+
+    def test_storage_response_fails_closed(self):
+        for storage in ({}, {'storageSizeGb': None}, {'storageSizeGb': '32'},
+                        {'storageSizeGb': 32, 'storageSizeGB': 64}):
+            with self.subTest(storage=storage), self.assertRaises(ValueError):
+                infra.postgres_storage_gb({'storage': storage})
+
     def test_authorized_configuration(self):
         infra.validate_template(self.doc)
 
