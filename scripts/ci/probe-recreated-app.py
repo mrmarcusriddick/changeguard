@@ -1,0 +1,67 @@
+"""Temporarily test a disabled, recreated F1 worker before package delivery."""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import secrets
+import shlex
+import time
+import urllib.error
+import urllib.request
+
+spec = importlib.util.spec_from_file_location('infra', 'scripts/ci/azure-infrastructure.py')
+infra = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(infra)
+az = infra.az
+name = os.environ['CG_APP_NAME']
+account = az('account', 'show')
+if account['id'] != infra.SUBSCRIPTION or account['tenantId'] != infra.TENANT:
+    raise RuntimeError('Unexpected Azure account')
+target = ['--resource-group', infra.GROUP, '--name', name]
+app = az('webapp', 'show', *target)
+if app.get('enabled') is not False:
+    print('Worker probe skipped: only disabled, recreated apps may use the temporary startup command.')
+    raise SystemExit(0)
+plan = az('appservice', 'plan', 'show', '--ids', app['serverFarmId'])
+if plan['sku']['name'] != 'F1':
+    raise RuntimeError('Worker probe requires the authorized F1 plan')
+config = az('webapp', 'config', 'show', *target)
+previous = config.get('appCommandLine') or ''
+nonce = secrets.token_hex(16)
+source = Path('scripts/ci/probe-worker.mjs').read_text().replace('__NONCE__', nonce)
+command = 'node --input-type=module -e ' + shlex.quote(source)
+url = 'https://management.azure.com' + app['id'] + '?api-version=2024-11-01'
+try:
+    az('webapp', 'config', 'set', *target, '--startup-file', command)
+    az('rest', '--method', 'patch', '--url', url, '--body', '{"properties":{"enabled":true}}')
+    az('webapp', 'start', *target)
+    deadline = time.monotonic() + 180
+    result = None
+    while time.monotonic() < deadline:
+        try:
+            try:
+                response = urllib.request.urlopen('https://' + name + '.azurewebsites.net/api/health', timeout=10)
+            except urllib.error.HTTPError as error:
+                response = error
+            with response:
+                candidate = json.loads(response.read(8192))
+            if candidate.get('probe') == nonce and candidate.get('done') is True:
+                result = candidate
+                break
+        except (OSError, ValueError):
+            pass
+        time.sleep(5)
+    if result is None:
+        raise RuntimeError('Worker probe did not return a current result within 180 seconds')
+    print('Application worker connectivity:', json.dumps({k: v for k, v in result.items() if k != 'probe'}), flush=True)
+    if result.get('tcp') is not True:
+        raise RuntimeError('PostgreSQL TCP/5432 is unreachable from the app worker; package delivery blocked')
+finally:
+    # Restore startup even when stopping fails. Never change auth or database rules.
+    try:
+        az('webapp', 'stop', *target)
+    finally:
+        try:
+            az('webapp', 'config', 'set', *target, '--startup-file', previous)
+        finally:
+            az('rest', '--method', 'patch', '--url', url, '--body', '{"properties":{"enabled":false}}')

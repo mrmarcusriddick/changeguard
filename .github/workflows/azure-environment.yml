@@ -50,6 +50,10 @@ jobs:
         env:
           CG_APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
         run: python3 scripts/ci/verify-postgres-delivery.py
+      - name: Test PostgreSQL from recreated app worker
+        env:
+          CG_APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
+        run: python3 scripts/ci/probe-recreated-app.py
       - name: Deploy previously tested package
         env:
           APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
