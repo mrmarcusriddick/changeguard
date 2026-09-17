@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import secrets
 import shlex
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -37,14 +38,29 @@ try:
     az('webapp', 'config', 'set', *target, '--startup-file', command)
     az('rest', '--method', 'patch', '--url', url, '--body', '{"properties":{"enabled":true}}')
     az('webapp', 'start', *target)
-    deadline = time.monotonic() + 180
+    deadline = time.monotonic() + 120
+    diagnostic_at = time.monotonic() + 35
+    diagnostic_taken = False
     result = None
     while time.monotonic() < deadline:
+        if not diagnostic_taken and time.monotonic() >= diagnostic_at:
+            diagnostic_taken = True
+            for arguments in (
+                ['webapp', 'show', *target, '--query', '{state:state,enabled:enabled,usageState:usageState}'],
+                ['webapp', 'log', 'startup', 'show', *target],
+            ):
+                try:
+                    diagnostic = subprocess.run(['az', *arguments, '--only-show-errors', '-o', 'json'],
+                                                capture_output=True, text=True, timeout=20)
+                    print(diagnostic.stdout or diagnostic.stderr, flush=True)
+                except subprocess.TimeoutExpired:
+                    print('Startup diagnostic timed out; continuing bounded probe', flush=True)
         try:
             try:
                 response = urllib.request.urlopen('https://' + name + '.azurewebsites.net/api/health', timeout=10)
             except urllib.error.HTTPError as error:
                 response = error
+            print('Worker probe HTTP status:', response.code, flush=True)
             with response:
                 candidate = json.loads(response.read(8192))
             if candidate.get('probe') == nonce and candidate.get('done') is True:
@@ -54,7 +70,7 @@ try:
             pass
         time.sleep(5)
     if result is None:
-        raise RuntimeError('Worker probe did not return a current result within 180 seconds')
+        raise RuntimeError('Worker probe did not return a current result within 120 seconds')
     print('Application worker connectivity:', json.dumps({k: v for k, v in result.items() if k != 'probe'}), flush=True)
     if result.get('tcp') is not True:
         raise RuntimeError('PostgreSQL TCP/5432 is unreachable from the app worker; package delivery blocked')
