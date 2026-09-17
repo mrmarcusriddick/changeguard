@@ -19,6 +19,33 @@ class InfrastructureGuards(unittest.TestCase):
                             'backup': {'backupRetentionDays': 7, 'geoRedundantBackup': 'Disabled'},
                             'highAvailability': {'mode': 'Disabled'}}}]}
 
+    def test_firewall_reconciliation_preserves_unrelated_rules(self):
+        existing = [
+            {'name': 'app-outbound-20-1-1-1', 'startIpAddress': '20.1.1.1', 'endIpAddress': '20.1.1.1'},
+            {'name': 'app-outbound-20-1-1-2', 'startIpAddress': '20.1.1.2', 'endIpAddress': '20.1.1.9'},
+            {'name': 'app-outbound-20-1-1-3', 'startIpAddress': '20.1.1.3', 'endIpAddress': '20.1.1.3'},
+            {'name': 'administrator-rule', 'startIpAddress': '20.1.1.4', 'endIpAddress': '20.1.1.4'},
+        ]
+        with patch.object(infra, 'az', return_value=existing) as az:
+            infra.reconcile_firewall('changeguard-mr-free', '20.1.1.1,20.1.1.2')
+        calls = [call.args for call in az.call_args_list]
+        writes = [call for call in calls if call[3] in ('create', 'delete')]
+        self.assertEqual(len(writes), 2)
+        self.assertEqual(writes[0][writes[0].index('--name') + 1], 'app-outbound-20-1-1-2')
+        self.assertEqual(writes[1][writes[1].index('--name') + 1], 'app-outbound-20-1-1-3')
+
+    def test_unchanged_firewall_has_no_writes(self):
+        existing = [{'name': 'app-outbound-20-1-1-1', 'startIpAddress': '20.1.1.1', 'endIpAddress': '20.1.1.1'}]
+        with patch.object(infra, 'az', return_value=existing) as az:
+            infra.reconcile_firewall('changeguard-mr-free', '20.1.1.1')
+        self.assertEqual(az.call_count, 1)
+
+    def test_invalid_firewall_addresses_cannot_write(self):
+        for address in ('', '0.0.0.0', 'invalid'):
+            with patch.object(infra, 'az') as az, self.assertRaises(ValueError):
+                infra.reconcile_firewall('changeguard-mr-free', address)
+            az.assert_not_called()
+
     def test_storage_response_casing(self):
         for key in ('storageSizeGb', 'storageSizeGB'):
             self.assertEqual(infra.postgres_storage_gb({'storage': {key: 32}}), 32)

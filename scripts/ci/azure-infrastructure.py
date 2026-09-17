@@ -93,6 +93,26 @@ def check():
     print('Provision permission will be validated by ARM during the provision operation; a read check alone does not prove Contributor access.')
 
 
+def reconcile_firewall(name, outbound_addresses):
+    addresses = sorted({str(ipaddress.IPv4Address(ip)) for ip in outbound_addresses.split(',')})
+    if not addresses or '0.0.0.0' in addresses:
+        raise ValueError('App outbound addresses unavailable; refusing broad firewall access.')
+    desired = {'app-outbound-' + ip.replace('.', '-'): ip for ip in addresses}
+    existing_rules = az('postgres', 'flexible-server', 'firewall-rule', 'list', '--resource-group', GROUP, '--server-name', name + '-pg')
+    existing = {rule['name']: rule for rule in existing_rules}
+    for rule, ip in desired.items():
+        current = existing.get(rule, {})
+        if current.get('startIpAddress') == ip and current.get('endIpAddress') == ip:
+            continue
+        print(f'Updating PostgreSQL firewall rule {rule}', flush=True)
+        az('postgres', 'flexible-server', 'firewall-rule', 'create', '--resource-group', GROUP,
+           '--server-name', name + '-pg', '--name', rule, '--start-ip-address', ip, '--end-ip-address', ip)
+    for rule in existing_rules:
+        if rule['name'].startswith('app-outbound-') and rule['name'] not in desired:
+            az('postgres', 'flexible-server', 'firewall-rule', 'delete', '--resource-group', GROUP,
+               '--server-name', name + '-pg', '--name', rule['name'], '--yes')
+
+
 def provision():
     inputs()
     check()
@@ -133,23 +153,7 @@ def provision():
     if plan['sku']['name'] != 'F1' or database['sku']['name'] != 'Standard_B1ms' or postgres_storage_gb(database) != 32 or database['storage']['autoGrow'] != 'Disabled':
         raise ValueError('Post-deployment cost verification failed. Inspect the resources immediately.')
     app = az('webapp', 'show', '--resource-group', GROUP, '--name', name)
-    addresses = sorted({str(ipaddress.IPv4Address(ip)) for ip in app['outboundIpAddresses'].split(',')})
-    if not addresses or '0.0.0.0' in addresses:
-        raise ValueError('App outbound addresses unavailable; refusing broad firewall access.')
-    desired = {'app-outbound-' + ip.replace('.', '-'): ip for ip in addresses}
-    existing_rules = az('postgres', 'flexible-server', 'firewall-rule', 'list', '--resource-group', GROUP, '--server-name', name + '-pg')
-    existing = {rule['name']: rule for rule in existing_rules}
-    for rule, ip in desired.items():
-        current = existing.get(rule, {})
-        if current.get('startIpAddress') == ip and current.get('endIpAddress') == ip:
-            continue
-        print(f'Updating PostgreSQL firewall rule {rule}', flush=True)
-        az('postgres', 'flexible-server', 'firewall-rule', 'create', '--resource-group', GROUP,
-           '--server-name', name + '-pg', '--name', rule, '--start-ip-address', ip, '--end-ip-address', ip)
-    for rule in existing_rules:
-        if rule['name'].startswith('app-outbound-') and rule['name'] not in desired:
-            az('postgres', 'flexible-server', 'firewall-rule', 'delete', '--resource-group', GROUP,
-               '--server-name', name + '-pg', '--name', rule['name'], '--yes')
+    reconcile_firewall(name, app['outboundIpAddresses'])
     print('F1 web and paid B1ms PostgreSQL provisioned. App remains stopped until package delivery.')
 
 
