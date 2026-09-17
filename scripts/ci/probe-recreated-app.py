@@ -29,7 +29,9 @@ config = az('webapp', 'config', 'show', *target)
 previous = config.get('appCommandLine') or ''
 nonce = secrets.token_hex(16)
 source = Path('scripts/ci/probe-worker.mjs').read_text().replace('__NONCE__', nonce)
-command = 'node --input-type=module -e ' + shlex.quote(source)
+command = 'node --input-type=module -e ' + shlex.quote(source.strip())
+if len(command) > 1024 or '\n' in command:
+    raise RuntimeError('Diagnostic startup command must fit on one short line')
 url = 'https://management.azure.com' + app['id'] + '?api-version=2024-11-01'
 try:
     az('webapp', 'config', 'set', *target, '--startup-file', command)
