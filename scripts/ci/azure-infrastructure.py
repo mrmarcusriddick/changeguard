@@ -137,10 +137,16 @@ def provision():
     if not addresses or '0.0.0.0' in addresses:
         raise ValueError('App outbound addresses unavailable; refusing broad firewall access.')
     desired = {'app-outbound-' + ip.replace('.', '-'): ip for ip in addresses}
+    existing_rules = az('postgres', 'flexible-server', 'firewall-rule', 'list', '--resource-group', GROUP, '--server-name', name + '-pg')
+    existing = {rule['name']: rule for rule in existing_rules}
     for rule, ip in desired.items():
+        current = existing.get(rule, {})
+        if current.get('startIpAddress') == ip and current.get('endIpAddress') == ip:
+            continue
+        print(f'Updating PostgreSQL firewall rule {rule}', flush=True)
         az('postgres', 'flexible-server', 'firewall-rule', 'create', '--resource-group', GROUP,
            '--server-name', name + '-pg', '--name', rule, '--start-ip-address', ip, '--end-ip-address', ip)
-    for rule in az('postgres', 'flexible-server', 'firewall-rule', 'list', '--resource-group', GROUP, '--server-name', name + '-pg'):
+    for rule in existing_rules:
         if rule['name'].startswith('app-outbound-') and rule['name'] not in desired:
             az('postgres', 'flexible-server', 'firewall-rule', 'delete', '--resource-group', GROUP,
                '--server-name', name + '-pg', '--name', rule['name'], '--yes')

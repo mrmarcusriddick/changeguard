@@ -28,6 +28,10 @@ if plan['sku']['name'] != 'F1':
     raise RuntimeError('Worker probe requires the authorized F1 plan')
 config = az('webapp', 'config', 'show', *target)
 previous = config.get('appCommandLine') or ''
+# A newly recreated app has no mounted ZIP yet. Run the independent probe
+# without package mounting, then restore the original setting before delivery.
+package = az('webapp', 'config', 'appsettings', 'list', *target,
+             '--query', "[?name=='WEBSITE_RUN_FROM_PACKAGE'].value | [0]")
 nonce = secrets.token_hex(16)
 source = Path('scripts/ci/probe-worker.mjs').read_text().replace('__NONCE__', nonce)
 command = 'node --input-type=module -e ' + shlex.quote(source.strip())
@@ -35,6 +39,9 @@ if len(command) > 1024 or '\n' in command:
     raise RuntimeError('Diagnostic startup command must fit on one short line')
 url = 'https://management.azure.com' + app['id'] + '?api-version=2024-11-01'
 try:
+    if package is not None:
+        az('webapp', 'config', 'appsettings', 'delete', *target,
+           '--setting-names', 'WEBSITE_RUN_FROM_PACKAGE')
     az('webapp', 'config', 'set', *target, '--startup-file', command)
     az('rest', '--method', 'patch', '--url', url, '--body', '{"properties":{"enabled":true}}')
     az('webapp', 'start', *target)
@@ -82,4 +89,9 @@ finally:
         try:
             az('webapp', 'config', 'set', *target, '--startup-file', previous)
         finally:
-            az('rest', '--method', 'patch', '--url', url, '--body', '{"properties":{"enabled":false}}')
+            try:
+                if package is not None:
+                    az('webapp', 'config', 'appsettings', 'set', *target,
+                       '--settings', 'WEBSITE_RUN_FROM_PACKAGE=' + package)
+            finally:
+                az('rest', '--method', 'patch', '--url', url, '--body', '{"properties":{"enabled":false}}')
