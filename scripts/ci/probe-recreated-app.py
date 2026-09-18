@@ -47,7 +47,7 @@ try:
     az('webapp', 'config', 'set', *target, '--startup-file', command)
     az('rest', '--method', 'patch', '--url', url, '--body', '{"properties":{"enabled":true}}')
     az('webapp', 'start', *target)
-    deadline = time.monotonic() + 120
+    deadline = time.monotonic() + 300
     diagnostic_at = time.monotonic() + 35
     diagnostic_taken = False
     result = None
@@ -85,7 +85,7 @@ try:
             pass
         time.sleep(5)
     if result is None:
-        raise RuntimeError('Worker probe did not return a current result within 120 seconds')
+        raise RuntimeError('Worker probe did not return a current result within 300 seconds')
     print('Application worker connectivity:', json.dumps({k: v for k, v in result.items() if k != 'probe'}), flush=True)
     if result.get('tcp') is not True:
         raise RuntimeError('PostgreSQL TCP/5432 is unreachable from the app worker; package delivery blocked')
