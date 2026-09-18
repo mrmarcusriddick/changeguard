@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Check connection or provision F1 web and paid B1ms PostgreSQL
+        description: Check connection or provision B1 web and paid B1ms PostgreSQL
         type: choice
         options: [check, provision]
         default: provision
@@ -97,6 +97,6 @@ jobs:
           az webapp log startup show --resource-group changeguard-free --name "$CG_APP_NAME" --only-show-errors
       - name: Check resource group access and compile PostgreSQL template
         run: python3 scripts/ci/azure-infrastructure.py check
-      - name: Preview and provision F1 web and paid PostgreSQL
+      - name: Preview and provision B1 web and paid PostgreSQL
         if: inputs.operation == 'provision' && github.event_name == 'workflow_dispatch'
         run: python3 scripts/ci/azure-infrastructure.py provision

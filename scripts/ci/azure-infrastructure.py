@@ -1,4 +1,4 @@
-"""GitHub OIDC provisioning entry point. Fixed F1 web plan and explicitly authorized B1ms PostgreSQL."""
+"""GitHub OIDC provisioning entry point. Fixed B1 web plan and explicitly authorized B1ms PostgreSQL."""
 import ipaddress
 import json
 import os
@@ -68,8 +68,8 @@ def validate_template(document):
         raise ValueError('Template contains a resource outside the authorized allowlist.')
     plans = [r for r in resources if r['type'] == 'Microsoft.Web/serverfarms']
     servers = [r for r in resources if r['type'] == 'Microsoft.DBforPostgreSQL/flexibleServers']
-    if len(plans) != 1 or plans[0]['sku'] != {'name': 'F1', 'tier': 'Free', 'capacity': 1}:
-        raise ValueError('Expected exactly one fixed F1 Free plan.')
+    if len(plans) != 1 or plans[0]['sku'] != {'name': 'B1', 'tier': 'Basic', 'capacity': 1}:
+        raise ValueError('Expected exactly one fixed B1 Basic plan.')
     if len(servers) != 1 or servers[0]['sku'] != {'name': 'Standard_B1ms', 'tier': 'Burstable'}:
         raise ValueError('Expected exactly one B1ms PostgreSQL server.')
     p = servers[0]['properties']
@@ -89,7 +89,7 @@ def check():
     subprocess.run(['az', 'bicep', 'build', '--file', 'azure/infra/postgres.bicep',
                     '--outfile', str(TEMPLATE)], check=True)
     validate_template(json.loads(TEMPLATE.read_text()))
-    print(f'OIDC login and resource-group read access verified. F1/B1ms template validated. App region: {group["location"]}; PostgreSQL region: {os.environ.get("CG_POSTGRES_LOCATION", "eastus")}.')
+    print(f'OIDC login and resource-group read access verified. B1/B1ms template validated. App region: {group["location"]}; PostgreSQL region: {os.environ.get("CG_POSTGRES_LOCATION", "eastus")}.')
     print('Provision permission will be validated by ARM during the provision operation; a read check alone does not prove Contributor access.')
 
 
@@ -118,10 +118,10 @@ def provision():
     check()
     name = os.environ['CG_APP_NAME']
     # Inspect existing resources before applying. Never convert a paid database
-    # or change a pre-existing paid plan to fit this deployment.
+    # or change a pre-existing plan to another SKU.
     for plan in az('appservice', 'plan', 'list', '--resource-group', GROUP):
-        if plan['name'] == name + '-free' and plan['sku']['name'] != 'F1':
-            raise ValueError('Target plan already exists on a paid SKU; stopping.')
+        if plan['name'] == name + '-free' and plan['sku']['name'] != 'B1':
+            raise ValueError('Target plan does not match the authorized B1 SKU; stopping.')
     servers = az('postgres', 'flexible-server', 'list', '--resource-group', GROUP)
     for server in servers:
         if server['name'] == name + '-pg':
@@ -150,11 +150,11 @@ def provision():
         parameter_file.unlink(missing_ok=True)
     plan = az('appservice', 'plan', 'show', '--resource-group', GROUP, '--name', name + '-free')
     database = az('postgres', 'flexible-server', 'show', '--resource-group', GROUP, '--name', name + '-pg')
-    if plan['sku']['name'] != 'F1' or database['sku']['name'] != 'Standard_B1ms' or postgres_storage_gb(database) != 32 or database['storage']['autoGrow'] != 'Disabled':
+    if plan['sku']['name'] != 'B1' or database['sku']['name'] != 'Standard_B1ms' or postgres_storage_gb(database) != 32 or database['storage']['autoGrow'] != 'Disabled':
         raise ValueError('Post-deployment cost verification failed. Inspect the resources immediately.')
     app = az('webapp', 'show', '--resource-group', GROUP, '--name', name)
     reconcile_firewall(name, app['outboundIpAddresses'])
-    print('F1 web and paid B1ms PostgreSQL provisioned. App remains stopped until package delivery.')
+    print('B1 web and paid B1ms PostgreSQL provisioned. App remains stopped until package delivery.')
 
 
 

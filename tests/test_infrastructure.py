@@ -12,7 +12,7 @@ spec.loader.exec_module(infra)
 class InfrastructureGuards(unittest.TestCase):
     def setUp(self):
         self.doc = {'resources': [
-            {'type': 'Microsoft.Web/serverfarms', 'sku': {'name': 'F1', 'tier': 'Free', 'capacity': 1}},
+            {'type': 'Microsoft.Web/serverfarms', 'sku': {'name': 'B1', 'tier': 'Basic', 'capacity': 1}},
             {'type': 'Microsoft.DBforPostgreSQL/flexibleServers',
              'sku': {'name': 'Standard_B1ms', 'tier': 'Burstable'},
              'properties': {'storage': {'storageSizeGB': 32, 'autoGrow': 'Disabled'},
@@ -71,14 +71,22 @@ class InfrastructureGuards(unittest.TestCase):
             with self.subTest(path=path, value=value), self.assertRaises(ValueError):
                 infra.validate_template(doc)
 
-    def test_reject_paid_web_and_extra_resources(self):
+    def test_reject_unauthorized_web_and_extra_resources(self):
         doc = copy.deepcopy(self.doc)
-        doc['resources'][0]['sku']['name'] = 'B1'
+        doc['resources'][0]['sku']['name'] = 'B2'
         with self.assertRaises(ValueError):
             infra.validate_template(doc)
         self.doc['resources'].append({'type': 'Microsoft.Sql/servers'})
         with self.assertRaises(ValueError):
             infra.validate_template(self.doc)
+
+    def test_reject_f1_downgrade_and_extra_instances(self):
+        for sku in ({'name': 'F1', 'tier': 'Free', 'capacity': 1},
+                    {'name': 'B1', 'tier': 'Basic', 'capacity': 2}):
+            doc = copy.deepcopy(self.doc)
+            doc['resources'][0]['sku'] = sku
+            with self.subTest(sku=sku), self.assertRaises(ValueError):
+                infra.validate_template(doc)
 
     def test_invalid_json_stops_with_command_name(self):
         with patch.object(infra.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'Resource changes', '')):

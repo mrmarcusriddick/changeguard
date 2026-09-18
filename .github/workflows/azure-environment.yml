@@ -46,7 +46,7 @@ jobs:
           tenant-id: a72c5ca4-2803-4603-b2ed-1d4e1a6db4f2
           subscription-id: a2e23015-1a59-4109-9126-cd464798993f
           environment: AzureCloud
-      - name: Verify F1 and PostgreSQL before delivery
+      - name: Verify B1 and PostgreSQL before delivery
         env:
           CG_APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
         run: python3 scripts/ci/verify-postgres-delivery.py

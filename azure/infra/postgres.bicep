@@ -37,7 +37,7 @@ resource plan 'Microsoft.Web/serverfarms@2024-11-01' = {
   name: '${appName}-free'
   location: location
   kind: 'linux'
-  sku: {name: 'F1', tier: 'Free', capacity: 1}
+  sku: {name: 'B1', tier: 'Basic', capacity: 1}
   properties: {reserved: true}
 }
 resource app 'Microsoft.Web/sites@2024-11-01' = {

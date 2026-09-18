@@ -1,4 +1,4 @@
-"""Temporarily test a disabled, recreated F1 worker before package delivery."""
+"""Temporarily test a disabled, recreated B1 worker before package delivery."""
 import importlib.util
 import json
 import os
@@ -24,8 +24,8 @@ if app.get('enabled') is not False:
     print('Worker probe skipped: only disabled, recreated apps may use the temporary startup command.')
     raise SystemExit(0)
 plan = az('appservice', 'plan', 'show', '--ids', app['serverFarmId'])
-if plan['sku']['name'] != 'F1':
-    raise RuntimeError('Worker probe requires the authorized F1 plan')
+if plan['sku']['name'] != 'B1' or plan['sku'].get('capacity') != 1:
+    raise RuntimeError('Worker probe requires the authorized B1 plan')
 config = az('webapp', 'config', 'show', *target)
 previous = config.get('appCommandLine') or ''
 # A newly recreated app has no mounted ZIP yet. Run the independent probe
