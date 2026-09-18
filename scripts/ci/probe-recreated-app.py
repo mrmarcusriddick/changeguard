@@ -39,6 +39,8 @@ if len(command) > 1024 or '\n' in command:
     raise RuntimeError('Diagnostic startup command must fit on one short line')
 url = 'https://management.azure.com' + app['id'] + '?api-version=2024-11-01'
 try:
+    # Capture stdout/stderr before starting, while Kudu remains accessible.
+    az('webapp', 'log', 'config', *target, '--docker-container-logging', 'filesystem')
     if package is not None:
         az('webapp', 'config', 'appsettings', 'delete', *target,
            '--setting-names', 'WEBSITE_RUN_FROM_PACKAGE')
@@ -54,14 +56,18 @@ try:
             diagnostic_taken = True
             for arguments in (
                 ['webapp', 'show', *target, '--query', '{state:state,enabled:enabled,usageState:usageState}'],
-                ['webapp', 'log', 'startup', 'show', *target],
+                ['webapp', 'log', 'tail', *target],
             ):
                 try:
                     diagnostic = subprocess.run(['az', *arguments, '--only-show-errors', '-o', 'json'],
                                                 capture_output=True, text=True, timeout=20)
                     print(diagnostic.stdout or diagnostic.stderr, flush=True)
-                except subprocess.TimeoutExpired:
-                    print('Startup diagnostic timed out; continuing bounded probe', flush=True)
+                except subprocess.TimeoutExpired as error:
+                    # Log streaming is intentionally bounded; keep its partial output.
+                    for output in (error.stdout, error.stderr):
+                        if output:
+                            print(output.decode('utf-8', errors='replace') if isinstance(output, bytes) else output, flush=True)
+                    print('Bounded startup log capture finished', flush=True)
         try:
             try:
                 response = urllib.request.urlopen('https://' + name + '.azurewebsites.net/api/health', timeout=10)
