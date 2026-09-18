@@ -79,7 +79,7 @@ jobs:
             echo "::error::Kudu remains unavailable. Review app state and quota usage above; no SKU or authentication change was made."
             exit 1
           fi
-          az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --src-path delivery/changeguard-azure.zip --type zip --clean true --restart true --output none
+          az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --src-path delivery/changeguard-azure.zip --type zip --clean true --restart true --track-status false --output none
       - name: Check database health, release identity, and authentication
         env:
           APP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'changeguard-mr-free' }}
