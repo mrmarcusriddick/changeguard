@@ -86,7 +86,9 @@ jobs:
       - name: Test Azure identity, PostgreSQL persistence and transaction rollback
         run: pnpm test:azure
       - name: Test infrastructure cost guards
-        run: python3 -m unittest discover -s tests -p "test_infrastructure.py"
+        run: |
+          python3 -m unittest discover -s tests -p "test_infrastructure.py"
+          python3 -m unittest discover -s tests -p "test_probe_command.py"
       - name: Validate infrastructure syntax
         run: |
           az bicep build --file azure/infra/main.bicep --stdout > /dev/null

@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 import secrets
-import shlex
 import subprocess
 import time
 import urllib.error
@@ -34,9 +33,10 @@ package = az('webapp', 'config', 'appsettings', 'list', *target,
              '--query', "[?name=='WEBSITE_RUN_FROM_PACKAGE'].value | [0]")
 nonce = secrets.token_hex(16)
 source = Path('scripts/ci/probe-worker.mjs').read_text().replace('__NONCE__', nonce)
-command = 'node --input-type=module -e ' + shlex.quote(source.strip())
-if len(command) > 1024 or '\n' in command:
-    raise RuntimeError('Diagnostic startup command must fit on one short line')
+command_spec = importlib.util.spec_from_file_location('probe_command', 'scripts/ci/probe-command.py')
+command_module = importlib.util.module_from_spec(command_spec)
+command_spec.loader.exec_module(command_module)
+command = command_module.startup_command(source)
 url = 'https://management.azure.com' + app['id'] + '?api-version=2024-11-01'
 try:
     # Capture stdout/stderr before starting, while Kudu remains accessible.
