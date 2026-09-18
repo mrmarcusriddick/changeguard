@@ -56,11 +56,13 @@ try:
             diagnostic_taken = True
             for arguments in (
                 ['webapp', 'show', *target, '--query', '{state:state,enabled:enabled,usageState:usageState}'],
-                ['webapp', 'log', 'tail', *target],
+                ['worker-container-logs'],
             ):
                 try:
-                    diagnostic = subprocess.run(['az', *arguments, '--only-show-errors', '-o', 'json'],
-                                                capture_output=True, text=True, timeout=20)
+                    command_args = (['python3', 'scripts/ci/worker-logs.py'] if arguments == ['worker-container-logs']
+                                    else ['az', *arguments, '--only-show-errors', '-o', 'json'])
+                    diagnostic = subprocess.run(command_args,
+                                                capture_output=True, text=True, timeout=45)
                     print(diagnostic.stdout or diagnostic.stderr, flush=True)
                 except subprocess.TimeoutExpired as error:
                     # Log streaming is intentionally bounded; keep its partial output.
