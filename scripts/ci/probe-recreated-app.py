@@ -25,6 +25,8 @@ if app.get('enabled') is not False:
 plan = az('appservice', 'plan', 'show', '--ids', app['serverFarmId'])
 if plan['sku']['name'] != 'B1' or plan['sku'].get('capacity') != 1:
     raise RuntimeError('Worker probe requires the authorized B1 plan')
+# A plan upgrade can change outbound addresses. Reconcile exact app IPs only.
+infra.reconcile_firewall(name, app['outboundIpAddresses'])
 config = az('webapp', 'config', 'show', *target)
 previous = config.get('appCommandLine') or ''
 # A newly recreated app has no mounted ZIP yet. Run the independent probe
