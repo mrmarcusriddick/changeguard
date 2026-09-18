@@ -85,6 +85,13 @@ try:
             pass
         time.sleep(5)
     if result is None:
+        try:
+            late = subprocess.run(['python3', 'scripts/ci/worker-logs.py'], capture_output=True, text=True, timeout=45)
+            print(late.stdout or late.stderr, flush=True)
+        except subprocess.TimeoutExpired as error:
+            for output in (error.stdout, error.stderr):
+                if output:
+                    print(output.decode('utf-8', errors='replace') if isinstance(output, bytes) else output, flush=True)
         raise RuntimeError('Worker probe did not return a current result within 300 seconds')
     print('Application worker connectivity:', json.dumps({k: v for k, v in result.items() if k != 'probe'}), flush=True)
     if result.get('tcp') is not True:
