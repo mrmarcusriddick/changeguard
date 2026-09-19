@@ -6,6 +6,8 @@ import {z} from 'zod';
 import {readFileSync} from 'node:fs';
 import {parsePrincipal} from '../azure/runtime/principal.ts';
 import {createDatabase, postgresOptions} from '../azure/runtime/store.ts';
+import {scan,history,monitoredTenant} from '../azure/monitor/service.ts';
+import {CollectionError} from '../azure/monitor/graph.ts';
 import {migrate} from '../azure/runtime/migrate.mjs';
 
 test('Entra principal requires configured tenant and stable object ID',()=>{
@@ -37,8 +39,26 @@ test('PostgreSQL migrations, full API flow, tenant isolation, and atomic rollbac
       await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
       await migrate(client,new URL('../azure/migrations/',import.meta.url));
       await migrate(client,new URL('../azure/migrations/',import.meta.url));
-      assert.equal((await client.query('SELECT count(*)::int AS n FROM schema_migrations')).rows[0].n,1);
+      assert.equal((await client.query('SELECT count(*)::int AS n FROM schema_migrations')).rows[0].n,2);
     } finally {client.release();}
+    const policy={id:'policy',displayName:'MFA',state:'enabled',conditions:{users:{excludeGroups:[]}},grantControls:{builtInControls:['mfa']}};
+    const first=await scan('operator',pool,async()=>[policy]);
+    let recorded=(await pool.query('SELECT * FROM entra_scans WHERE id=$1',[first.id])).rows[0];
+    assert.deepEqual(recorded.findings,[]);assert.equal(recorded.baseline_id,first.id);
+    await assert.rejects(scan('operator',pool,async()=>[]),/one minute/);
+    await pool.query("UPDATE entra_scans SET started=started-interval '2 minutes'");
+    await assert.rejects(scan('operator',pool,async()=>{throw new CollectionError('THROTTLED','Try later');}),/Try later/);
+    assert.equal((await history(pool)).scans[0].status,'failed');
+    recorded=(await pool.query('SELECT * FROM entra_scans WHERE id=$1',[first.id])).rows[0];
+    assert.deepEqual(recorded.policies,[policy]);
+    await pool.query("UPDATE entra_scans SET started=started-interval '2 minutes'");
+    const second=await scan('operator',pool,async()=>[{...policy,state:'disabled'}]);
+    recorded=(await pool.query('SELECT * FROM entra_scans WHERE id=$1',[second.id])).rows[0];
+    assert.equal(recorded.findings[0].severity,'high');assert.equal(recorded.baseline_id,first.id);
+    const locker=await pool.connect();
+    try{await locker.query('SELECT pg_advisory_lock(72004202)');await assert.rejects(scan('operator',pool,async()=>[]),/Another scan/);}
+    finally{await locker.query('SELECT pg_advisory_unlock(72004202)');locker.release();}
+    assert.equal((await history(pool)).tenant,monitoredTenant);
     const db=createDatabase(pool);
     let user={userId:'tenant-a:owner',displayName:'Owner'};
     const route=moduleFrom('../app/api/workspace/route.ts',{'@/app/chatgpt-auth':{getChatGPTUser:async()=>user},'@/lib/store':{database:()=>db},'@/lib/engine':moduleFrom('../lib/engine.ts'),zod:{z}});

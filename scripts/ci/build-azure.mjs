@@ -15,6 +15,15 @@ cpSync('azure/runtime/principal.ts',resolve(stage,'app/principal.ts'));
 mkdirSync(resolve(stage,'app/api/health'),{recursive:true});
 cpSync('azure/runtime/health.ts',resolve(stage,'app/api/health/route.ts'));
 writeFileSync(resolve(stage,'app/page.tsx'),readFileSync('app/page.tsx','utf8').replace('/signin-with-chatgpt?return_to=/', '/.auth/login/aad?post_login_redirect_uri=/'));
+// Azure-only monitoring uses managed identity and PostgreSQL, never the Sites runtime.
+cpSync('azure/monitor',resolve(stage,'azure/monitor'),{recursive:true});
+mkdirSync(resolve(stage,'azure/runtime'),{recursive:true});
+cpSync('azure/runtime/store.ts',resolve(stage,'azure/runtime/store.ts'));
+mkdirSync(resolve(stage,'app/api/entra'),{recursive:true});
+writeFileSync(resolve(stage,'app/api/entra/route.ts'),readFileSync('azure/monitor/route.ts','utf8').replace("'./service.ts'", "'@/azure/monitor/service'").replace("'./graph.ts'", "'@/azure/monitor/graph'"));
+mkdirSync(resolve(stage,'app/entra'),{recursive:true});
+writeFileSync(resolve(stage,'app/entra/page.tsx'), "export {default} from '@/azure/monitor/page';\n");
+writeFileSync(resolve(stage,'app/page.tsx'),readFileSync(resolve(stage,'app/page.tsx'),'utf8').replace('<span>{user}</span>', '<a href="/entra">Entra monitoring</a><span>{user}</span>'));
 // Trust a configured public origin instead of Next's internal reverse-proxy URL.
 writeFileSync(resolve(stage,'app/api/workspace/route.ts'),readFileSync('app/api/workspace/route.ts','utf8').replace('origin!==new URL(request.url).origin','origin!==process.env.APP_ORIGIN'));
 writeFileSync(resolve(stage,'next.config.mjs'), 'export default {output:"standalone", outputFileTracingRoot:process.cwd(), serverExternalPackages:["pg"]};\n');

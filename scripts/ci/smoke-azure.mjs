@@ -14,6 +14,8 @@ for (let attempt=0;attempt<30;attempt++) {
 }
 if (!healthy) throw new Error('Deployment failed database/release health check');
 const forged = {auth_typ:'aad',claims:[{typ:'tid',val:'a72c5ca4-2803-4603-b2ed-1d4e1a6db4f2'},{typ:'oid',val:'00000000-0000-0000-0000-000000000001'}]};
-const privateResponse = await fetch(`${origin}/api/workspace`,{redirect:'manual',signal:AbortSignal.timeout(10000),headers:{'x-ms-client-principal':Buffer.from(JSON.stringify(forged)).toString('base64')}});
-if (![302,401,403].includes(privateResponse.status)) throw new Error('Anonymous workspace access was not rejected');
-console.log(`Verified ${commit}: database ready; anonymous workspace access rejected.`);
+for (const path of ['/api/workspace','/api/entra']) {
+  const privateResponse = await fetch(`${origin}${path}`,{redirect:'manual',signal:AbortSignal.timeout(10000),headers:{'x-ms-client-principal':Buffer.from(JSON.stringify(forged)).toString('base64')}});
+  if (![302,401,403].includes(privateResponse.status)) throw new Error(`Anonymous access was not rejected: ${path}`);
+}
+console.log(`Verified ${commit}: database ready; anonymous workspace and Entra monitoring access rejected.`);
